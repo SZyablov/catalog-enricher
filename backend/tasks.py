@@ -43,8 +43,6 @@ def process_row(self, job_id: str, row_index: int, system_prompt: str, data: dic
         stream=False
     )
     result = response.message.content
-    # results.append(line)
-
     
     result = {
         "row_index": row_index,
@@ -53,9 +51,8 @@ def process_row(self, job_id: str, row_index: int, system_prompt: str, data: dic
         "status": "ok"
         }
 
-    # Обновляем прогресс в Redis (атомарно)
+    # Обновляем прогресс в Redis
     r.incr(f"job:{job_id}:completed")
-    # Можно опционально сохранить результат строки (например в список или hash)
     r.hset(f"job:{job_id}:results", row_index, json.dumps(result, default=str))
 
     return result

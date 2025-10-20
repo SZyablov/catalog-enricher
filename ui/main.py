@@ -27,7 +27,6 @@ def send_file(file, system_prompt):
         status = requests.get(f"{backend_url}/status/{job_id}").json()
         completed = status["completed"]
         progress = completed / total
-        # print(status)
         yield join_cards(status["results_preview"]), f"Progress: {completed}/{total} ({progress*100:.1f}%)", status
         time.sleep(2)
 
@@ -104,7 +103,6 @@ def join_cards(results):
     return cards_html
 
 if __name__ == "__main__":
-    # Allow overriding host/port via environment variables when running in Docker
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", 7860))
     demo.launch(server_name=host, server_port=port)

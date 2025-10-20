@@ -11,8 +11,6 @@ from io import BytesIO
 import os
 import redis
 from tasks import process_row
-# from core.orchestrator import enqueue_task_from_excel
-# from db.models import init_db, SessionLocal, Task
 
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
@@ -48,7 +46,7 @@ async def upload_excel(file: UploadFile = File(...), generation: str = Form(...)
 
     rows = df.to_dict(orient="records")#[:5]
 
-    # Enqueue tasks and initialize progress; any failure here should return a clear error
+    # загружаем задачи в очередь Celery
     try:
         job_id = str(uuid.uuid4())
         total = len(rows)
@@ -61,7 +59,6 @@ async def upload_excel(file: UploadFile = File(...), generation: str = Form(...)
         for idx, row in enumerate(rows):
             # посылаем задачу в celery; queue по умолчанию пойдёт в broker
             res = process_row.apply_async(args=(job_id, idx, generation_obj.system, row))
-            # If apply_async returns an object without id attribute, handle gracefully
             task_id = getattr(res, 'id', None)
             task_ids.append(task_id)
 
@@ -77,7 +74,7 @@ def job_status(job_id: str):
         total = int(r.get(f"job:{job_id}:total") or 0)
         completed = int(r.get(f"job:{job_id}:completed") or 0)
     except Exception:
-        # If Redis is unreachable or returns unexpected values, surface a clear error
+        # если Redis недоступен или возвращает неожиданные значения, выдаём понятную ошибку
         logger.exception("Failed to read progress from Redis for job %s", job_id)
         return JSONResponse({"error": "Failed to read job progress"}, status_code=500)
 
@@ -89,7 +86,6 @@ def job_status(job_id: str):
             try:
                 results[k] = json.loads(v)
             except Exception:
-                # fallback: return raw value
                 results[k] = v
     except Exception:
         logger.exception("Failed to read results hash from Redis for job %s", job_id)
