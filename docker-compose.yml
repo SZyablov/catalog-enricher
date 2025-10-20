@@ -1,0 +1,81 @@
+version: "3.8"
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    gpus: all
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # Backend web service
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      - ollama
+      - rabbitmq
+      - redis
+    environment:
+      # Celery / Redis settings
+      BROKER_URL: "amqp://guest:guest@rabbitmq:5672//"
+      RESULT_BACKEND: "redis://redis:6379/0"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      # web server settings
+      HOST: "0.0.0.0"
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    command: ["web"]
+    restart: unless-stopped
+
+  # Celery worker (runs the same image as backend but in worker mode)
+  worker:
+    build:
+      context: ./backend
+    depends_on:
+      - rabbitmq
+      - redis
+    environment:
+      BROKER_URL: "amqp://guest:guest@rabbitmq:5672//"
+      RESULT_BACKEND: "redis://redis:6379/0"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      # Explicit Celery configuration compatible with entrypoint
+      CELERY_APP: "celery_app.celery_app"
+      CELERY_WORKER_ARGS: "--loglevel=info --concurrency=1"
+    command: ["worker"]
+    restart: unless-stopped
+
+  # UI (Gradio)
+  ui:
+    build:
+      context: ./ui
+    depends_on:
+      - backend
+    environment:
+      # ui/main.py will read this and use it to contact the backend service
+      BACKEND_URL: "http://backend:8000"
+    ports:
+      - "7860:7860"
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
