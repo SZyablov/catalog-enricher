@@ -11,6 +11,7 @@ from io import BytesIO
 import os
 import redis
 from tasks import process_row
+import time
 
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,21 @@ logger = logging.getLogger(__name__)
 redis_host = os.environ.get("REDIS_HOST", "localhost")
 redis_port = int(os.environ.get("REDIS_PORT", 6379))
 r = redis.Redis(host=redis_host, port=redis_port, db=1, decode_responses=True)
+
+last_log_time = 0
+LOG_INTERVAL = 2
+model_name = "qwen2.5:7b"
+ollama_client = ollama.Client('http://ollama:11434')
+installed = [m["name"] for m in ollama_client.list()["models"]]
+if model_name not in installed:
+    print(f"Модель {model_name} не найдена — скачиваю...")
+    for progress in ollama_client.pull(model_name, stream=True):
+        if "status" in progress:
+            now = time.time()
+            if now - last_log_time >= LOG_INTERVAL:
+                print(f"{progress['status']} {progress.get('digest', '')}")
+                last_log_time = now
+    print("✅ Модель скачана!")
 
 class ToGenerate(BaseModel):
     system: str
